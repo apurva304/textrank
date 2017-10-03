@@ -12,6 +12,27 @@ import itertools
 import networkx as nx
 import nltk
 import os
+import string
+from sklearn.feature_extraction.text import TfidfVectorizer
+import matplotlib.pyplot as plt
+
+stemmer = nltk.stem.porter.PorterStemmer()
+remove_punctuation_map = dict((ord(char), None) for char in string.punctuation)
+
+def stem_tokens(tokens):
+    #print('in stem_tokens')
+    return [stemmer.stem(item) for item in tokens]
+
+'''remove punctuation, lowercase, stem'''
+def normalize(text):
+    #print('in normalize')
+    return stem_tokens(nltk.word_tokenize(text.lower().translate(remove_punctuation_map)))
+
+vectorizer = TfidfVectorizer(tokenizer=normalize, stop_words='english')
+
+def cosine_sim(text1, text2):
+    tfidf = vectorizer.fit_transform([text1, text2])
+    return ((tfidf * tfidf.T).A)[0,1]
 
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
@@ -42,7 +63,7 @@ def setup_environment():
     print('Completed resource downloads.')
 
 
-def levenshtein_distance(first, second):
+'''def levenshtein_distance(first, second):
     """Return the Levenshtein distance between two strings.
 
     Based on:
@@ -61,7 +82,7 @@ def levenshtein_distance(first, second):
                                               distances[index1 + 1],
                                               new_distances[-1])))
         distances = new_distances
-    return distances[-1]
+    return distances[-1]'''
 
 
 def build_graph(nodes):
@@ -74,19 +95,23 @@ def build_graph(nodes):
     nodePairs = list(itertools.combinations(nodes, 2))
     l = len(nodePairs)
 
-    # add edges to the graph (weighted by Levenshtein distance)
     printProgressBar(0, l, prefix='Progress:', suffix='Complete', length=50)
     for i, pair in enumerate(nodePairs):
         firstString = pair[0]
         secondString = pair[1]
-        levDistance = levenshtein_distance(firstString, secondString)
-        gr.add_edge(firstString, secondString, weight=levDistance)
+        #print('firstString:\t' + pair[0])
+        #print('secondString:\t' + pair[1])
+        tfdif = cosine_sim(firstString, secondString)
+        #print('The Edge is:\t',tfdif)
+        gr.add_edge(firstString, secondString, weight=tfdif)
         printProgressBar(i + 1, l, prefix='Progress:', suffix='Complete', length=50)
 
+    nx.draw(gr,with_labels=True)
+    plt.show()
     return gr
 
 
-def extract_sentences(text, summary_length=100, clean_sentences=False, language='english'):
+def extract_sentences(text, summary_length=120, clean_sentences=False, language='english'):
     """Return a paragraph formatted summary of the source text.
 
     :param text: A string.
@@ -94,6 +119,8 @@ def extract_sentences(text, summary_length=100, clean_sentences=False, language=
     print("tokenizing.......")
     sent_detector = nltk.data.load('tokenizers/punkt/' + language + '.pickle')
     sentence_tokens = sent_detector.tokenize(text.strip())
+
+    #print(sentence_tokens)
 
     print("building graph")
     graph = build_graph(sentence_tokens)
